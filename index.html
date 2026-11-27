@@ -13,10 +13,21 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 #signup{background:#0F3D2E;color:#F4F1E6}
 #login{background:#D9B45A;color:#0B2E22}
 #msg{margin-top:14px;font-size:15px;line-height:1.5}
+#app{display:none;max-width:420px;margin:0 auto;padding:20px 16px 90px}
+.top{font-size:22px;font-weight:700}
+.who{font-size:13px;color:#4A5F55;margin-top:4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.chip{background:#E4DDC8;padding:9px 14px;border-radius:18px;font-size:14px}
+.chip.on{background:#0F3D2E;color:#F4F1E6}
+.card{background:#0F3D2E;color:#F4F1E6;border-radius:16px;padding:24px;line-height:1.7;font-size:15px}
+.good{background:#E3EFE6;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
+.bad{background:#F3E1DC;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
+.nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0B2E22}
+.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:20px 0;font-size:15px}
 </style>
 </head>
 <body>
-<div class="box">
+<div id="auth" class="box">
 <h1>Halal Content</h1>
 <input id="email" type="email" placeholder="ईमेल" autocapitalize="none">
 <input id="password" type="password" placeholder="पासवर्ड (कम से कम 6 अक्षर)">
@@ -24,22 +35,56 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 <button id="login">लॉगिन कीजिए</button>
 <div id="msg"></div>
 </div>
+
+<div id="app">
+<div class="top">Halal Content</div>
+<div class="who" id="who"></div>
+<div id="homeView">
+<div class="chips"><span class="chip on">बयानात</span><span class="chip">तिलावत</span><span class="chip">नात</span><span class="chip">तर्जुमा</span></div>
+<div class="card">अभी यहाँ कोई वीडियो नहीं है। जल्द ही बयानात, तिलावत, नात और क़ुरान के तर्जुमे के वीडियो यहाँ दिखेंगे, इन शा अल्लाह।</div>
+</div>
+<div id="rulesView" style="display:none">
+<div class="top" style="margin-top:20px">हलाल कंटेंट के नियम</div>
+<div class="good"><b>क्या चलेगा</b><br>बयानात<br>क़ुरान की तिलावत<br>क़ुरान का तर्जुमा और सूरतें<br>नात शरीफ़</div>
+<div class="bad"><b>क्या नहीं चलेगा</b><br>नाच-गाना और बाजे<br>गेमिंग और खेल-कूद के वीडियो<br>अश्लील कंटेंट</div>
+</div>
+<div class="nav">
+<button id="tHome">होम</button>
+<button id="tRules">नियम</button>
+<button id="tOut">लॉगआउट</button>
+</div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 const db = supabase.createClient(
   'https://thgyhgnkhvulqkwaislb.supabase.co',
   'sb_publishable_BlpKh-c-XFPdrsBoT8QueQ_NPIOoOC1'
 );
-const msg = document.getElementById('msg');
-const val = id => document.getElementById(id).value.trim();
-document.getElementById('signup').onclick = async () => {
+const $ = id => document.getElementById(id);
+const val = id => $(id).value.trim();
+function show(session) {
+  $('auth').style.display = session ? 'none' : 'block';
+  $('app').style.display = session ? 'block' : 'none';
+  if (session) $('who').textContent = session.user.email;
+}
+db.auth.getSession().then(r => show(r.data.session));
+db.auth.onAuthStateChange((e, s) => show(s));
+$('signup').onclick = async () => {
   const { error } = await db.auth.signUp({ email: val('email'), password: val('password') });
-  msg.textContent = error ? 'गलती: ' + error.message : 'हो गया। अपने ईमेल में आया लिंक दबाकर पुष्टि कीजिए।';
+  $('msg').textContent = error ? 'गलती: ' + error.message : 'हो गया। अपने ईमेल में आया लिंक दबाकर पुष्टि कीजिए।';
 };
-document.getElementById('login').onclick = async () => {
+$('login').onclick = async () => {
   const { error } = await db.auth.signInWithPassword({ email: val('email'), password: val('password') });
-  msg.textContent = error ? 'गलती: ' + error.message : 'लॉगिन हो गया। स्वागत है!';
+  $('msg').textContent = error ? 'गलती: ' + error.message : '';
 };
+function tab(n) {
+  $('homeView').style.display = n === 'home' ? 'block' : 'none';
+  $('rulesView').style.display = n === 'rules' ? 'block' : 'none';
+}
+$('tHome').onclick = () => tab('home');
+$('tRules').onclick = () => tab('rules');
+$('tOut').onclick = () => db.auth.signOut();
 </script>
 </body>
-  </html>
+</html>
