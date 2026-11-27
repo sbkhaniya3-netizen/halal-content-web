@@ -8,11 +8,12 @@
 body{margin:0;font-family:"Noto Sans Devanagari","Segoe UI",sans-serif;background:#F7F4EA;color:#0B2E22}
 .box{max-width:420px;margin:0 auto;padding:60px 20px}
 h1{font-size:28px;margin:0 0 24px}
-input{width:100%;box-sizing:border-box;padding:14px;margin-bottom:12px;border:1px solid #1D5A44;border-radius:12px;font-size:16px}
+input,select{width:100%;box-sizing:border-box;padding:14px;margin-bottom:12px;border:1px solid #1D5A44;border-radius:12px;font-size:16px;background:#fff}
 button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-weight:700;margin-bottom:10px}
 #signup{background:#0F3D2E;color:#F4F1E6}
 #login{background:#D9B45A;color:#0B2E22}
-#msg{margin-top:14px;font-size:15px;line-height:1.5}
+#send{background:#0F3D2E;color:#F4F1E6}
+#msg,#upmsg{margin-top:14px;font-size:15px;line-height:1.5}
 #app{display:none;max-width:420px;margin:0 auto;padding:20px 16px 90px}
 .top{font-size:22px;font-weight:700}
 .who{font-size:13px;color:#4A5F55;margin-top:4px}
@@ -24,6 +25,7 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 .bad{background:#F3E1DC;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
 .nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0B2E22}
 .nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:20px 0;font-size:15px}
+label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 </style>
 </head>
 <body>
@@ -43,6 +45,18 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 <div class="chips"><span class="chip on">बयानात</span><span class="chip">तिलावत</span><span class="chip">नात</span><span class="chip">तर्जुमा</span></div>
 <div class="card">अभी यहाँ कोई वीडियो नहीं है। जल्द ही बयानात, तिलावत, नात और क़ुरान के तर्जुमे के वीडियो यहाँ दिखेंगे, इन शा अल्लाह।</div>
 </div>
+<div id="uploadView" style="display:none">
+<div class="top" style="margin:20px 0 10px">वीडियो अपलोड करें</div>
+<label>वीडियो चुनिए (30 MB तक)</label>
+<input id="file" type="file" accept="video/*">
+<label>श्रेणी</label>
+<select id="cat"><option>बयानात</option><option>तिलावत</option><option>नात</option><option>तर्जुमा</option></select>
+<label>शीर्षक</label>
+<input id="title" type="text" placeholder="वीडियो का शीर्षक">
+<button id="send">जाँच के लिए भेजिए</button>
+<div id="upmsg"></div>
+<div style="font-size:13px;color:#4A5F55;line-height:1.6">आपका वीडियो जाँच के बाद ही सबको दिखेगा। सिर्फ़ बयानात, तिलावत, नात और तर्जुमा के वीडियो भेजिए।</div>
+</div>
 <div id="rulesView" style="display:none">
 <div class="top" style="margin-top:20px">हलाल कंटेंट के नियम</div>
 <div class="good"><b>क्या चलेगा</b><br>बयानात<br>क़ुरान की तिलावत<br>क़ुरान का तर्जुमा और सूरतें<br>नात शरीफ़</div>
@@ -50,6 +64,7 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 </div>
 <div class="nav">
 <button id="tHome">होम</button>
+<button id="tUp">अपलोड</button>
 <button id="tRules">नियम</button>
 <button id="tOut">लॉगआउट</button>
 </div>
@@ -63,7 +78,9 @@ const db = supabase.createClient(
 );
 const $ = id => document.getElementById(id);
 const val = id => $(id).value.trim();
+let me = null;
 function show(session) {
+  me = session ? session.user : null;
   $('auth').style.display = session ? 'none' : 'block';
   $('app').style.display = session ? 'block' : 'none';
   if (session) $('who').textContent = session.user.email;
@@ -79,12 +96,28 @@ $('login').onclick = async () => {
   $('msg').textContent = error ? 'गलती: ' + error.message : '';
 };
 function tab(n) {
-  $('homeView').style.display = n === 'home' ? 'block' : 'none';
-  $('rulesView').style.display = n === 'rules' ? 'block' : 'none';
+  ['home','upload','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
 }
 $('tHome').onclick = () => tab('home');
+$('tUp').onclick = () => tab('upload');
 $('tRules').onclick = () => tab('rules');
 $('tOut').onclick = () => db.auth.signOut();
+$('send').onclick = async () => {
+  const f = $('file').files[0];
+  const t = val('title');
+  if (!f) { $('upmsg').textContent = 'पहले वीडियो चुनिए।'; return; }
+  if (!t) { $('upmsg').textContent = 'शीर्षक लिखिए।'; return; }
+  if (f.size > 31457280) { $('upmsg').textContent = 'वीडियो 30 MB से बड़ा है।'; return; }
+  $('upmsg').textContent = 'भेज रहे हैं... थोड़ा रुकिए।';
+  const ext = (f.name.split('.').pop() || 'mp4').toLowerCase();
+  const path = me.id + '/' + Date.now() + '.' + ext;
+  const up = await db.storage.from('videos').upload(path, f);
+  if (up.error) { $('upmsg').textContent = 'गलती: ' + up.error.message; return; }
+  const ins = await db.from('videos').insert({ title: t, category: $('cat').value, path: path });
+  if (ins.error) { $('upmsg').textContent = 'गलती: ' + ins.error.message; return; }
+  $('upmsg').textContent = 'हो गया। आपका वीडियो जाँच में है।';
+  $('file').value = ''; $('title').value = '';
+};
 </script>
 </body>
 </html>
