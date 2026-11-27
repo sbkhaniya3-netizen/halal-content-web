@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halal Content</title>
+<style>
+body{margin:0;font-family:"Noto Sans Devanagari","Segoe UI",sans-serif;background:#F7F4EA;color:#0B2E22}
+.box{max-width:420px;margin:0 auto;padding:60px 20px}
+h1{font-size:28px;margin:0 0 24px}
+input{width:100%;box-sizing:border-box;padding:14px;margin-bottom:12px;border:1px solid #1D5A44;border-radius:12px;font-size:16px}
+button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-weight:700;margin-bottom:10px}
+#signup{background:#0F3D2E;color:#F4F1E6}
+#login{background:#D9B45A;color:#0B2E22}
+#msg{margin-top:14px;font-size:15px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>Halal Content</h1>
+<input id="email" type="email" placeholder="ईमेल" autocapitalize="none">
+<input id="password" type="password" placeholder="पासवर्ड (कम से कम 6 अक्षर)">
+<button id="signup">नया अकाउंट बनाइए</button>
+<button id="login">लॉगिन कीजिए</button>
+<div id="msg"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const db = supabase.createClient(
+  'https://thgyhgnkhvulqkwaislb.supabase.co',
+  'sb_publishable_BlpKh-c-XFPdrsBoT8QueQ_NPIOoOC1'
+);
+const msg = document.getElementById('msg');
+const val = id => document.getElementById(id).value.trim();
+document.getElementById('signup').onclick = async () => {
+  const { error } = await db.auth.signUp({ email: val('email'), password: val('password') });
+  msg.textContent = error ? 'गलती: ' + error.message : 'हो गया। अपने ईमेल में आया लिंक दबाकर पुष्टि कीजिए।';
+};
+document.getElementById('login').onclick = async () => {
+  const { error } = await db.auth.signInWithPassword({ email: val('email'), password: val('password') });
+  msg.textContent = error ? 'गलती: ' + error.message : 'लॉगिन हो गया। स्वागत है!';
+};
+</script>
+</body>
+  </html>
