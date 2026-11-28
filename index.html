@@ -17,9 +17,6 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 #app{display:none;max-width:420px;margin:0 auto;padding:20px 16px 90px}
 .top{font-size:22px;font-weight:700}
 .who{font-size:13px;color:#4A5F55;margin-top:4px}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
-.chip{background:#E4DDC8;padding:9px 14px;border-radius:18px;font-size:14px;cursor:pointer}
-.chip.on{background:#0F3D2E;color:#F4F1E6}
 .card{background:#0F3D2E;color:#F4F1E6;border-radius:16px;padding:24px;line-height:1.7;font-size:15px}
 .vid{background:#fff;border:1px solid #D8D2BC;border-radius:16px;padding:12px;margin-bottom:16px}
 .vid video{width:100%;border-radius:12px;background:#000}
@@ -31,9 +28,20 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 .no{background:#F3E1DC;color:#8A2D1F}
 .good{background:#E3EFE6;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
 .bad{background:#F3E1DC;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
-.nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0B2E22}
-.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:20px 0;font-size:14px}
+.nav{position:fixed;left:0;right:0;bottom:0;height:60px;display:flex;background:#0B2E22;z-index:10}
+.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:0;font-size:14px}
 label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
+#homeView{position:fixed;top:0;left:0;right:0;bottom:60px;background:#000;z-index:5}
+#chips{position:absolute;top:0;left:0;right:0;z-index:6;padding:14px 12px 28px;display:flex;gap:8px;overflow-x:auto;background:linear-gradient(rgba(0,0,0,.7),rgba(0,0,0,0))}
+.chip{background:rgba(255,255,255,.22);color:#fff;padding:9px 14px;border-radius:18px;font-size:14px;white-space:nowrap}
+.chip.on{background:#D9B45A;color:#0B2E22;font-weight:700}
+#snd{position:absolute;top:62px;right:12px;z-index:6;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:6px 10px;border-radius:12px}
+#feed{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
+.reel{height:100%;scroll-snap-align:start;scroll-snap-stop:always;position:relative;background:#000}
+.reel video{width:100%;height:100%;object-fit:contain;background:#000}
+.cap{position:absolute;left:16px;right:16px;bottom:24px;color:#fff;font-size:17px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
+.cap small{display:block;color:#D9B45A;font-size:13px;margin-top:4px}
+.msg{height:100%;display:flex;align-items:center;justify-content:center;color:#F4F1E6;padding:24px;text-align:center;line-height:1.7;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -50,7 +58,8 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 <div class="top">Halal Content</div>
 <div class="who" id="who"></div>
 <div id="homeView">
-<div class="chips" id="chips"></div>
+<div id="chips"></div>
+<div id="snd"></div>
 <div id="feed"></div>
 </div>
 <div id="uploadView" style="display:none">
@@ -92,7 +101,10 @@ const db = supabase.createClient(
 const $ = id => document.getElementById(id);
 const val = id => $(id).value.trim();
 const CATS = ['बयानात','तिलावत','नात','तर्जुमा'];
-let me = null, isAdmin = false, curCat = CATS[0];
+let me = null, isAdmin = false, curCat = CATS[0], soundOn = false, io = null;
+
+function updSnd() { $('snd').textContent = soundOn ? 'आवाज़ चालू' : 'आवाज़ बंद: वीडियो दबाइए'; }
+function pauseAll() { document.querySelectorAll('#feed video').forEach(v => v.pause()); }
 
 async function show(session) {
   me = session ? session.user : null;
@@ -120,6 +132,7 @@ $('login').onclick = async () => {
 
 function tab(n) {
   ['home','upload','admin','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
+  if (n !== 'home') pauseAll();
   if (n === 'home') loadFeed();
   if (n === 'admin') loadPending();
 }
@@ -127,7 +140,7 @@ $('tHome').onclick = () => tab('home');
 $('tUp').onclick = () => tab('upload');
 $('tAdmin').onclick = () => tab('admin');
 $('tRules').onclick = () => tab('rules');
-$('tOut').onclick = () => db.auth.signOut();
+$('tOut').onclick = () => { pauseAll(); db.auth.signOut(); };
 
 function drawChips() {
   $('chips').innerHTML = '';
@@ -146,21 +159,44 @@ async function signed(path) {
 }
 
 async function loadFeed() {
-  $('feed').innerHTML = '<div class="card">लोड हो रहा है...</div>';
+  updSnd();
+  if (io) io.disconnect();
+  $('feed').innerHTML = '<div class="msg">लोड हो रहा है...</div>';
   const r = await db.from('videos').select('*').eq('status','approved').eq('category', curCat).order('created_at',{ascending:false});
-  if (r.error) { $('feed').innerHTML = '<div class="card">गलती: ' + r.error.message + '</div>'; return; }
-  if (!r.data.length) { $('feed').innerHTML = '<div class="card">इस श्रेणी में अभी कोई वीडियो नहीं है, इन शा अल्लाह जल्द आएँगे।</div>'; return; }
+  if (r.error) { $('feed').innerHTML = '<div class="msg">गलती: ' + r.error.message + '</div>'; return; }
+  if (!r.data.length) { $('feed').innerHTML = '<div class="msg">इस श्रेणी में अभी कोई वीडियो नहीं है, इन शा अल्लाह जल्द आएँगे।</div>'; return; }
+  const urls = await Promise.all(r.data.map(v => signed(v.path)));
   $('feed').innerHTML = '';
-  for (const v of r.data) {
-    const url = await signed(v.path);
+  io = new IntersectionObserver(es => es.forEach(e => {
+    const v = e.target.querySelector('video');
+    if (e.isIntersecting) {
+      v.muted = !soundOn;
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    } else {
+      v.pause();
+    }
+  }), { root: $('feed'), threshold: 0.7 });
+  r.data.forEach((v, i) => {
     const d = document.createElement('div');
-    d.className = 'vid';
+    d.className = 'reel';
     const vi = document.createElement('video');
-    vi.src = url; vi.controls = true; vi.preload = 'metadata'; vi.setAttribute('playsinline','');
-    const t = document.createElement('div'); t.className = 'vt'; t.textContent = v.title;
-    d.appendChild(vi); d.appendChild(t);
+    vi.src = urls[i]; vi.loop = true; vi.muted = true; vi.preload = 'metadata';
+    vi.setAttribute('playsinline','');
+    const c = document.createElement('div');
+    c.className = 'cap';
+    c.textContent = v.title;
+    const s = document.createElement('small');
+    s.textContent = v.category;
+    c.appendChild(s);
+    d.onclick = () => {
+      soundOn = !soundOn;
+      document.querySelectorAll('#feed video').forEach(x => x.muted = !soundOn);
+      updSnd();
+    };
+    d.appendChild(vi); d.appendChild(c);
     $('feed').appendChild(d);
-  }
+    io.observe(d);
+  });
 }
 
 async function loadPending() {
