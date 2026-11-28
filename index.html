@@ -29,7 +29,7 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 .good{background:#E3EFE6;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
 .bad{background:#F3E1DC;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
 .nav{position:fixed;left:0;right:0;bottom:0;height:60px;display:flex;background:#0B2E22;z-index:10}
-.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:0;font-size:14px}
+.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:0;font-size:12px}
 label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 #homeView{position:fixed;top:0;left:0;right:0;bottom:60px;background:#000;z-index:5}
 #chips{position:absolute;top:0;left:0;right:0;z-index:6;padding:14px 12px 28px;display:flex;gap:8px;overflow-x:auto;background:linear-gradient(rgba(0,0,0,.7),rgba(0,0,0,0))}
@@ -47,6 +47,10 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 .msg{height:100%;display:flex;align-items:center;justify-content:center;color:#F4F1E6;padding:24px;text-align:center;line-height:1.7;box-sizing:border-box}
 #repBox{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:30;align-items:center;justify-content:center}
 #repIn{background:#fff;border-radius:16px;padding:20px;width:86%;max-width:360px}
+.mine{background:#fff;border:1px solid #D8D2BC;border-radius:14px;padding:14px;margin-bottom:10px}
+.st{display:inline-block;margin-top:6px;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700}
+.st.p{background:#F7E7B4;color:#7A5B00}
+.st.a{background:#CFE8D6;color:#0F3D2E}
 </style>
 </head>
 <body>
@@ -77,7 +81,11 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 <input id="title" type="text" placeholder="वीडियो का शीर्षक">
 <button id="send">जाँच के लिए भेजिए</button>
 <div id="upmsg"></div>
-<div style="font-size:13px;color:#4A5F55;line-height:1.6">आपका वीडियो जाँच के बाद ही सबको दिखेगा। सिर्फ़ बयानात, तिलावत, नात और तर्जुमा के वीडियो भेजिए।</div>
+<div style="font-size:13px;color:#4A5F55;line-height:1.6">आपका वीडियो जाँच के बाद ही सबको दिखेगा। सिर्फ़ बयानात, तिलावत, नात और तर्जुमा के वीडियो भेजिए। सिर्फ़ अपना बनाया हुआ, या जिसकी इजाज़त हो, वही वीडियो डालिए।</div>
+</div>
+<div id="mineView" style="display:none">
+<div class="top" style="margin:20px 0 10px">मेरे वीडियो</div>
+<div id="mylist"></div>
 </div>
 <div id="adminView" style="display:none">
 <div class="top" style="margin:20px 0 10px">मंज़ूरी के इंतज़ार में</div>
@@ -87,12 +95,13 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 </div>
 <div id="rulesView" style="display:none">
 <div class="top" style="margin-top:20px">हलाल कंटेंट के नियम</div>
-<div class="good"><b>क्या चलेगा</b><br>बयानात<br>क़ुरान की तिलावत<br>क़ुरान का तर्जुमा और सूरतें<br>नात शरीफ़</div>
-<div class="bad"><b>क्या नहीं चलेगा</b><br>नाच-गाना और बाजे<br>गेमिंग और खेल-कूद के वीडियो<br>अश्लील कंटेंट</div>
+<div class="good"><b>क्या चलेगा</b><br>बयानात<br>क़ुरान की तिलावत<br>क़ुरान का तर्जुमा और सूरतें<br>नात शरीफ़<br>सिर्फ़ अपना बनाया या इजाज़त वाला वीडियो</div>
+<div class="bad"><b>क्या नहीं चलेगा</b><br>नाच-गाना और बाजे<br>गेमिंग और खेल-कूद के वीडियो<br>अश्लील कंटेंट<br>दूसरों के बनाए वीडियो बिना इजाज़त</div>
 </div>
 <div class="nav">
 <button id="tHome">होम</button>
 <button id="tUp">अपलोड</button>
+<button id="tMine">मेरे</button>
 <button id="tAdmin" style="display:none">मंज़ूरी</button>
 <button id="tRules">नियम</button>
 <button id="tOut">लॉगआउट</button>
@@ -152,13 +161,15 @@ $('login').onclick = async () => {
 };
 
 function tab(n) {
-  ['home','upload','admin','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
+  ['home','upload','mine','admin','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
   if (n !== 'home') pauseAll();
   if (n === 'home') loadFeed();
+  if (n === 'mine') loadMine();
   if (n === 'admin') { loadPending(); loadReports(); }
 }
 $('tHome').onclick = () => tab('home');
 $('tUp').onclick = () => tab('upload');
+$('tMine').onclick = () => tab('mine');
 $('tAdmin').onclick = () => tab('admin');
 $('tRules').onclick = () => tab('rules');
 $('tOut').onclick = () => { pauseAll(); db.auth.signOut(); };
@@ -193,6 +204,26 @@ $('repSend').onclick = async () => {
   $('repMsg').textContent = 'शुक्रिया। आपकी शिकायत हम तक पहुँच गई।';
   setTimeout(closeRep, 1300);
 };
+
+async function loadMine() {
+  $('mylist').innerHTML = '<div class="card">लोड हो रहा है...</div>';
+  const r = await db.from('videos').select('*').eq('user_id', me.id).order('created_at',{ascending:false});
+  if (r.error) { $('mylist').innerHTML = '<div class="card">गलती: ' + r.error.message + '</div>'; return; }
+  if (!r.data.length) { $('mylist').innerHTML = '<div class="card">आपने अभी कोई वीडियो नहीं भेजा है।</div>'; return; }
+  $('mylist').innerHTML = '';
+  r.data.forEach(v => {
+    const d = document.createElement('div');
+    d.className = 'mine';
+    const t = document.createElement('div'); t.className = 'vt'; t.textContent = v.title;
+    const s = document.createElement('div'); s.className = 'vs'; s.textContent = v.category;
+    const b = document.createElement('span');
+    const ok = v.status === 'approved';
+    b.className = 'st ' + (ok ? 'a' : 'p');
+    b.textContent = ok ? 'मंज़ूर' : 'जाँच में';
+    d.appendChild(t); d.appendChild(s); d.appendChild(b);
+    $('mylist').appendChild(d);
+  });
+}
 
 async function loadFeed() {
   updSnd();
@@ -356,4 +387,4 @@ $('send').onclick = async () => {
 };
 </script>
 </body>
-</html>
+  </html>
