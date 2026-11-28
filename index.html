@@ -21,7 +21,7 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 .vid{background:#fff;border:1px solid #D8D2BC;border-radius:16px;padding:12px;margin-bottom:16px}
 .vid video{width:100%;border-radius:12px;background:#000}
 .vt{font-weight:700;margin:8px 0 2px}
-.vs{font-size:13px;color:#4A5F55}
+.vs{font-size:13px;color:#4A5F55;line-height:1.5}
 .row{display:flex;gap:8px;margin-top:10px}
 .row button{margin:0;padding:12px;font-size:14px}
 .ok{background:#0F3D2E;color:#F4F1E6}
@@ -39,9 +39,12 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 #feed{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
 .reel{height:100%;scroll-snap-align:start;scroll-snap-stop:always;position:relative;background:#000}
 .reel video{width:100%;height:100%;object-fit:contain;background:#000}
-.cap{position:absolute;left:16px;right:16px;bottom:24px;color:#fff;font-size:17px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
+.cap{position:absolute;left:16px;right:100px;bottom:24px;color:#fff;font-size:17px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
 .cap small{display:block;color:#D9B45A;font-size:13px;margin-top:4px}
+.rep{position:absolute;right:12px;bottom:24px;z-index:7;width:auto;margin:0;padding:10px 14px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700}
 .msg{height:100%;display:flex;align-items:center;justify-content:center;color:#F4F1E6;padding:24px;text-align:center;line-height:1.7;box-sizing:border-box}
+#repBox{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:30;align-items:center;justify-content:center}
+#repIn{background:#fff;border-radius:16px;padding:20px;width:86%;max-width:360px}
 </style>
 </head>
 <body>
@@ -77,6 +80,8 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 <div id="adminView" style="display:none">
 <div class="top" style="margin:20px 0 10px">मंज़ूरी के इंतज़ार में</div>
 <div id="pending"></div>
+<div class="top" style="margin:24px 0 10px">शिकायतें</div>
+<div id="reports"></div>
 </div>
 <div id="rulesView" style="display:none">
 <div class="top" style="margin-top:20px">हलाल कंटेंट के नियम</div>
@@ -92,6 +97,20 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 </div>
 </div>
 
+<div id="repBox"><div id="repIn">
+<div class="top" style="font-size:18px">शिकायत का कारण</div>
+<select id="repWhy" style="margin-top:12px">
+<option>नाच-गाना या बाजे</option>
+<option>गेमिंग या खेल-कूद</option>
+<option>अश्लील कंटेंट</option>
+<option>गलत जानकारी</option>
+<option>कुछ और</option>
+</select>
+<button id="repSend" class="ok">शिकायत भेजिए</button>
+<button id="repCancel" class="no">रद्द कीजिए</button>
+<div id="repMsg" style="font-size:14px;line-height:1.5"></div>
+</div></div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 const db = supabase.createClient(
@@ -101,7 +120,7 @@ const db = supabase.createClient(
 const $ = id => document.getElementById(id);
 const val = id => $(id).value.trim();
 const CATS = ['बयानात','तिलावत','नात','तर्जुमा'];
-let me = null, isAdmin = false, curCat = CATS[0], soundOn = false, io = null;
+let me = null, isAdmin = false, curCat = CATS[0], soundOn = false, io = null, repId = null;
 
 function updSnd() { $('snd').textContent = soundOn ? 'आवाज़ चालू' : 'आवाज़ बंद: वीडियो दबाइए'; }
 function pauseAll() { document.querySelectorAll('#feed video').forEach(v => v.pause()); }
@@ -134,7 +153,7 @@ function tab(n) {
   ['home','upload','admin','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
   if (n !== 'home') pauseAll();
   if (n === 'home') loadFeed();
-  if (n === 'admin') loadPending();
+  if (n === 'admin') { loadPending(); loadReports(); }
 }
 $('tHome').onclick = () => tab('home');
 $('tUp').onclick = () => tab('upload');
@@ -157,6 +176,21 @@ async function signed(path) {
   const r = await db.storage.from('videos').createSignedUrl(path, 3600);
   return r.data ? r.data.signedUrl : '';
 }
+
+function openRep(id) { repId = id; $('repMsg').textContent = ''; $('repBox').style.display = 'flex'; }
+function closeRep() { $('repBox').style.display = 'none'; repId = null; }
+$('repCancel').onclick = closeRep;
+$('repSend').onclick = async () => {
+  if (!repId) return;
+  $('repMsg').textContent = 'भेज रहे हैं...';
+  const r = await db.from('reports').insert({ video_id: repId, reason: $('repWhy').value });
+  if (r.error) {
+    $('repMsg').textContent = r.error.code === '23505' ? 'आप इस वीडियो की शिकायत पहले ही कर चुके हैं।' : 'गलती: ' + r.error.message;
+    return;
+  }
+  $('repMsg').textContent = 'शुक्रिया। आपकी शिकायत हम तक पहुँच गई।';
+  setTimeout(closeRep, 1300);
+};
 
 async function loadFeed() {
   updSnd();
@@ -188,12 +222,16 @@ async function loadFeed() {
     const s = document.createElement('small');
     s.textContent = v.category;
     c.appendChild(s);
+    const rp = document.createElement('button');
+    rp.className = 'rep';
+    rp.textContent = 'रिपोर्ट';
+    rp.onclick = e => { e.stopPropagation(); openRep(v.id); };
     d.onclick = () => {
       soundOn = !soundOn;
       document.querySelectorAll('#feed video').forEach(x => x.muted = !soundOn);
       updSnd();
     };
-    d.appendChild(vi); d.appendChild(c);
+    d.appendChild(vi); d.appendChild(c); d.appendChild(rp);
     $('feed').appendChild(d);
     io.observe(d);
   });
@@ -232,6 +270,48 @@ async function loadPending() {
   }
 }
 
+async function loadReports() {
+  $('reports').innerHTML = '<div class="card">लोड हो रहा है...</div>';
+  const r = await db.from('reports').select('id,video_id,reason,created_at,videos(id,title,category,path)').order('created_at',{ascending:true});
+  if (r.error) { $('reports').innerHTML = '<div class="card">गलती: ' + r.error.message + '</div>'; return; }
+  const g = {};
+  r.data.forEach(x => {
+    if (!x.videos) return;
+    if (!g[x.video_id]) g[x.video_id] = { v: x.videos, why: [] };
+    g[x.video_id].why.push(x.reason);
+  });
+  const ids = Object.keys(g);
+  if (!ids.length) { $('reports').innerHTML = '<div class="card">अभी कोई शिकायत नहीं है।</div>'; return; }
+  $('reports').innerHTML = '';
+  for (const id of ids) {
+    const v = g[id].v;
+    const url = await signed(v.path);
+    const d = document.createElement('div');
+    d.className = 'vid';
+    const vi = document.createElement('video');
+    vi.src = url; vi.controls = true; vi.preload = 'metadata'; vi.setAttribute('playsinline','');
+    const t = document.createElement('div'); t.className = 'vt'; t.textContent = v.title;
+    const s = document.createElement('div'); s.className = 'vs';
+    s.textContent = v.category + ' | ' + g[id].why.length + ' शिकायत: ' + g[id].why.join(', ');
+    const row = document.createElement('div'); row.className = 'row';
+    const del = document.createElement('button'); del.className = 'no'; del.textContent = 'वीडियो हटाओ';
+    const clr = document.createElement('button'); clr.className = 'ok'; clr.textContent = 'शिकायत ख़ारिज करो';
+    del.onclick = async () => {
+      if (!confirm('इस वीडियो को हमेशा के लिए हटा दें?')) return;
+      await db.storage.from('videos').remove([v.path]);
+      const x = await db.from('videos').delete().eq('id', v.id);
+      if (x.error) alert('गलती: ' + x.error.message); else loadReports();
+    };
+    clr.onclick = async () => {
+      const x = await db.from('reports').delete().eq('video_id', v.id);
+      if (x.error) alert('गलती: ' + x.error.message); else loadReports();
+    };
+    row.appendChild(del); row.appendChild(clr);
+    d.appendChild(vi); d.appendChild(t); d.appendChild(s); d.appendChild(row);
+    $('reports').appendChild(d);
+  }
+}
+
 $('send').onclick = async () => {
   const f = $('file').files[0];
   const t = val('title');
@@ -250,4 +330,4 @@ $('send').onclick = async () => {
 };
 </script>
 </body>
-  </html>
+</html>
