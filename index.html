@@ -18,13 +18,21 @@ button{width:100%;padding:15px;border:0;border-radius:12px;font-size:16px;font-w
 .top{font-size:22px;font-weight:700}
 .who{font-size:13px;color:#4A5F55;margin-top:4px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
-.chip{background:#E4DDC8;padding:9px 14px;border-radius:18px;font-size:14px}
+.chip{background:#E4DDC8;padding:9px 14px;border-radius:18px;font-size:14px;cursor:pointer}
 .chip.on{background:#0F3D2E;color:#F4F1E6}
 .card{background:#0F3D2E;color:#F4F1E6;border-radius:16px;padding:24px;line-height:1.7;font-size:15px}
+.vid{background:#fff;border:1px solid #D8D2BC;border-radius:16px;padding:12px;margin-bottom:16px}
+.vid video{width:100%;border-radius:12px;background:#000}
+.vt{font-weight:700;margin:8px 0 2px}
+.vs{font-size:13px;color:#4A5F55}
+.row{display:flex;gap:8px;margin-top:10px}
+.row button{margin:0;padding:12px;font-size:14px}
+.ok{background:#0F3D2E;color:#F4F1E6}
+.no{background:#F3E1DC;color:#8A2D1F}
 .good{background:#E3EFE6;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
 .bad{background:#F3E1DC;border-radius:14px;padding:16px;margin-top:16px;line-height:1.9}
 .nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0B2E22}
-.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:20px 0;font-size:15px}
+.nav button{flex:1;margin:0;border-radius:0;background:none;color:#E8F1EA;padding:20px 0;font-size:14px}
 label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 </style>
 </head>
@@ -42,8 +50,8 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 <div class="top">Halal Content</div>
 <div class="who" id="who"></div>
 <div id="homeView">
-<div class="chips"><span class="chip on">बयानात</span><span class="chip">तिलावत</span><span class="chip">नात</span><span class="chip">तर्जुमा</span></div>
-<div class="card">अभी यहाँ कोई वीडियो नहीं है। जल्द ही बयानात, तिलावत, नात और क़ुरान के तर्जुमे के वीडियो यहाँ दिखेंगे, इन शा अल्लाह।</div>
+<div class="chips" id="chips"></div>
+<div id="feed"></div>
 </div>
 <div id="uploadView" style="display:none">
 <div class="top" style="margin:20px 0 10px">वीडियो अपलोड करें</div>
@@ -57,6 +65,10 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 <div id="upmsg"></div>
 <div style="font-size:13px;color:#4A5F55;line-height:1.6">आपका वीडियो जाँच के बाद ही सबको दिखेगा। सिर्फ़ बयानात, तिलावत, नात और तर्जुमा के वीडियो भेजिए।</div>
 </div>
+<div id="adminView" style="display:none">
+<div class="top" style="margin:20px 0 10px">मंज़ूरी के इंतज़ार में</div>
+<div id="pending"></div>
+</div>
 <div id="rulesView" style="display:none">
 <div class="top" style="margin-top:20px">हलाल कंटेंट के नियम</div>
 <div class="good"><b>क्या चलेगा</b><br>बयानात<br>क़ुरान की तिलावत<br>क़ुरान का तर्जुमा और सूरतें<br>नात शरीफ़</div>
@@ -65,6 +77,7 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 <div class="nav">
 <button id="tHome">होम</button>
 <button id="tUp">अपलोड</button>
+<button id="tAdmin" style="display:none">मंज़ूरी</button>
 <button id="tRules">नियम</button>
 <button id="tOut">लॉगआउट</button>
 </div>
@@ -78,15 +91,24 @@ const db = supabase.createClient(
 );
 const $ = id => document.getElementById(id);
 const val = id => $(id).value.trim();
-let me = null;
-function show(session) {
+const CATS = ['बयानात','तिलावत','नात','तर्जुमा'];
+let me = null, isAdmin = false, curCat = CATS[0];
+
+async function show(session) {
   me = session ? session.user : null;
   $('auth').style.display = session ? 'none' : 'block';
   $('app').style.display = session ? 'block' : 'none';
-  if (session) $('who').textContent = session.user.email;
+  if (!session) return;
+  $('who').textContent = session.user.email;
+  const a = await db.from('admins').select('user_id').eq('user_id', me.id);
+  isAdmin = !a.error && a.data && a.data.length > 0;
+  $('tAdmin').style.display = isAdmin ? 'block' : 'none';
+  drawChips();
+  loadFeed();
 }
 db.auth.getSession().then(r => show(r.data.session));
-db.auth.onAuthStateChange((e, s) => show(s));
+db.auth.onAuthStateChange((e, s) => { if (e === 'SIGNED_IN' || e === 'SIGNED_OUT') show(s); });
+
 $('signup').onclick = async () => {
   const { error } = await db.auth.signUp({ email: val('email'), password: val('password') });
   $('msg').textContent = error ? 'गलती: ' + error.message : 'हो गया। अपने ईमेल में आया लिंक दबाकर पुष्टि कीजिए।';
@@ -95,13 +117,85 @@ $('login').onclick = async () => {
   const { error } = await db.auth.signInWithPassword({ email: val('email'), password: val('password') });
   $('msg').textContent = error ? 'गलती: ' + error.message : '';
 };
+
 function tab(n) {
-  ['home','upload','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
+  ['home','upload','admin','rules'].forEach(v => $(v + 'View').style.display = v === n ? 'block' : 'none');
+  if (n === 'home') loadFeed();
+  if (n === 'admin') loadPending();
 }
 $('tHome').onclick = () => tab('home');
 $('tUp').onclick = () => tab('upload');
+$('tAdmin').onclick = () => tab('admin');
 $('tRules').onclick = () => tab('rules');
 $('tOut').onclick = () => db.auth.signOut();
+
+function drawChips() {
+  $('chips').innerHTML = '';
+  CATS.forEach(c => {
+    const s = document.createElement('span');
+    s.className = 'chip' + (c === curCat ? ' on' : '');
+    s.textContent = c;
+    s.onclick = () => { curCat = c; drawChips(); loadFeed(); };
+    $('chips').appendChild(s);
+  });
+}
+
+async function signed(path) {
+  const r = await db.storage.from('videos').createSignedUrl(path, 3600);
+  return r.data ? r.data.signedUrl : '';
+}
+
+async function loadFeed() {
+  $('feed').innerHTML = '<div class="card">लोड हो रहा है...</div>';
+  const r = await db.from('videos').select('*').eq('status','approved').eq('category', curCat).order('created_at',{ascending:false});
+  if (r.error) { $('feed').innerHTML = '<div class="card">गलती: ' + r.error.message + '</div>'; return; }
+  if (!r.data.length) { $('feed').innerHTML = '<div class="card">इस श्रेणी में अभी कोई वीडियो नहीं है, इन शा अल्लाह जल्द आएँगे।</div>'; return; }
+  $('feed').innerHTML = '';
+  for (const v of r.data) {
+    const url = await signed(v.path);
+    const d = document.createElement('div');
+    d.className = 'vid';
+    const vi = document.createElement('video');
+    vi.src = url; vi.controls = true; vi.preload = 'metadata'; vi.setAttribute('playsinline','');
+    const t = document.createElement('div'); t.className = 'vt'; t.textContent = v.title;
+    d.appendChild(vi); d.appendChild(t);
+    $('feed').appendChild(d);
+  }
+}
+
+async function loadPending() {
+  $('pending').innerHTML = '<div class="card">लोड हो रहा है...</div>';
+  const r = await db.from('videos').select('*').eq('status','pending').order('created_at',{ascending:true});
+  if (r.error) { $('pending').innerHTML = '<div class="card">गलती: ' + r.error.message + '</div>'; return; }
+  if (!r.data.length) { $('pending').innerHTML = '<div class="card">कोई वीडियो इंतज़ार में नहीं है।</div>'; return; }
+  $('pending').innerHTML = '';
+  for (const v of r.data) {
+    const url = await signed(v.path);
+    const d = document.createElement('div');
+    d.className = 'vid';
+    const vi = document.createElement('video');
+    vi.src = url; vi.controls = true; vi.preload = 'metadata'; vi.setAttribute('playsinline','');
+    const t = document.createElement('div'); t.className = 'vt'; t.textContent = v.title;
+    const s = document.createElement('div'); s.className = 'vs'; s.textContent = v.category;
+    const row = document.createElement('div'); row.className = 'row';
+    const ok = document.createElement('button'); ok.className = 'ok'; ok.textContent = 'मंज़ूर करो';
+    const no = document.createElement('button'); no.className = 'no'; no.textContent = 'हटाओ';
+    ok.onclick = async () => {
+      const u = await db.from('videos').update({ status: 'approved' }).eq('id', v.id);
+      if (u.error) alert('गलती: ' + u.error.message); else loadPending();
+    };
+    no.onclick = async () => {
+      if (!confirm('इस वीडियो को हटा दें?')) return;
+      await db.storage.from('videos').remove([v.path]);
+      const x = await db.from('videos').delete().eq('id', v.id);
+      if (x.error) alert('गलती: ' + x.error.message); else loadPending();
+    };
+    row.appendChild(ok); row.appendChild(no);
+    d.appendChild(vi); d.appendChild(t); d.appendChild(s); d.appendChild(row);
+    $('pending').appendChild(d);
+  }
+}
+
 $('send').onclick = async () => {
   const f = $('file').files[0];
   const t = val('title');
@@ -120,4 +214,4 @@ $('send').onclick = async () => {
 };
 </script>
 </body>
-</html>
+  </html>
