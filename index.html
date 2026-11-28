@@ -42,6 +42,8 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 .cap{position:absolute;left:16px;right:100px;bottom:24px;color:#fff;font-size:17px;font-weight:700;text-shadow:0 1px 4px #000;pointer-events:none}
 .cap small{display:block;color:#D9B45A;font-size:13px;margin-top:4px}
 .rep{position:absolute;right:12px;bottom:24px;z-index:7;width:auto;margin:0;padding:10px 14px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700}
+.lik{position:absolute;right:12px;bottom:76px;z-index:7;width:auto;margin:0;padding:10px 14px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;font-size:15px;font-weight:700}
+.lik.on{color:#FF6B81}
 .msg{height:100%;display:flex;align-items:center;justify-content:center;color:#F4F1E6;padding:24px;text-align:center;line-height:1.7;box-sizing:border-box}
 #repBox{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:30;align-items:center;justify-content:center}
 #repIn{background:#fff;border-radius:16px;padding:20px;width:86%;max-width:360px}
@@ -199,7 +201,13 @@ async function loadFeed() {
   const r = await db.from('videos').select('*').eq('status','approved').eq('category', curCat).order('created_at',{ascending:false});
   if (r.error) { $('feed').innerHTML = '<div class="msg">गलती: ' + r.error.message + '</div>'; return; }
   if (!r.data.length) { $('feed').innerHTML = '<div class="msg">इस श्रेणी में अभी कोई वीडियो नहीं है, इन शा अल्लाह जल्द आएँगे।</div>'; return; }
+  const ids = r.data.map(v => v.id);
   const urls = await Promise.all(r.data.map(v => signed(v.path)));
+  const lk = await db.from('video_likes').select('video_id,n').in('video_id', ids);
+  const my = await db.from('likes').select('video_id').in('video_id', ids);
+  const counts = {};
+  (lk.data || []).forEach(x => counts[x.video_id] = x.n);
+  const mine = new Set((my.data || []).map(x => x.video_id));
   $('feed').innerHTML = '';
   io = new IntersectionObserver(es => es.forEach(e => {
     const v = e.target.querySelector('video');
@@ -226,12 +234,30 @@ async function loadFeed() {
     rp.className = 'rep';
     rp.textContent = 'रिपोर्ट';
     rp.onclick = e => { e.stopPropagation(); openRep(v.id); };
+    let n = counts[v.id] || 0;
+    let liked = mine.has(v.id);
+    const lb = document.createElement('button');
+    const paint = () => { lb.className = 'lik' + (liked ? ' on' : ''); lb.textContent = (liked ? '♥ ' : '♡ ') + n; };
+    paint();
+    lb.onclick = async e => {
+      e.stopPropagation();
+      lb.disabled = true;
+      if (liked) {
+        const x = await db.from('likes').delete().eq('video_id', v.id).eq('user_id', me.id);
+        if (!x.error) { liked = false; n = Math.max(0, n - 1); }
+      } else {
+        const x = await db.from('likes').insert({ video_id: v.id });
+        if (!x.error) { liked = true; n += 1; }
+      }
+      lb.disabled = false;
+      paint();
+    };
     d.onclick = () => {
       soundOn = !soundOn;
       document.querySelectorAll('#feed video').forEach(x => x.muted = !soundOn);
       updSnd();
     };
-    d.appendChild(vi); d.appendChild(c); d.appendChild(rp);
+    d.appendChild(vi); d.appendChild(c); d.appendChild(lb); d.appendChild(rp);
     $('feed').appendChild(d);
     io.observe(d);
   });
