@@ -44,6 +44,7 @@ label{display:block;font-size:14px;font-weight:700;margin:10px 0 6px}
 .rep{position:absolute;right:12px;bottom:24px;z-index:7;width:auto;margin:0;padding:10px 14px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700}
 .lik{position:absolute;right:12px;bottom:76px;z-index:7;width:auto;margin:0;padding:10px 14px;border-radius:18px;background:rgba(0,0,0,.55);color:#fff;font-size:15px;font-weight:700}
 .lik.on{color:#FF6B81}
+.adm{position:absolute;right:12px;bottom:128px;z-index:7;width:auto;margin:0;padding:10px 14px;border-radius:18px;background:#8A2D1F;color:#fff;font-size:13px;font-weight:700}
 .msg{height:100%;display:flex;align-items:center;justify-content:center;color:#F4F1E6;padding:24px;text-align:center;line-height:1.7;box-sizing:border-box}
 #repBox{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:30;align-items:center;justify-content:center}
 #repIn{background:#fff;border-radius:16px;padding:20px;width:86%;max-width:360px}
@@ -135,6 +136,10 @@ let me = null, isAdmin = false, curCat = CATS[0], soundOn = false, io = null, re
 
 function updSnd() { $('snd').textContent = soundOn ? 'आवाज़ चालू' : 'आवाज़ बंद: वीडियो दबाइए'; }
 function pauseAll() { document.querySelectorAll('#feed video').forEach(v => v.pause()); }
+async function delFile(path) {
+  const rm = await db.storage.from('videos').remove([path]);
+  if (rm.error || !rm.data || !rm.data.length) alert('वीडियो की फ़ाइल नहीं हटी। Supabase वाला कोड चलाइए।');
+}
 
 async function show(session) {
   me = session ? session.user : null;
@@ -289,6 +294,19 @@ async function loadFeed() {
       updSnd();
     };
     d.appendChild(vi); d.appendChild(c); d.appendChild(lb); d.appendChild(rp);
+    if (isAdmin) {
+      const ad = document.createElement('button');
+      ad.className = 'adm';
+      ad.textContent = 'हटाओ';
+      ad.onclick = async e => {
+        e.stopPropagation();
+        if (!confirm('इस वीडियो को हमेशा के लिए हटा दें?')) return;
+        await delFile(v.path);
+        const x = await db.from('videos').delete().eq('id', v.id);
+        if (x.error) alert('गलती: ' + x.error.message); else loadFeed();
+      };
+      d.appendChild(ad);
+    }
     $('feed').appendChild(d);
     io.observe(d);
   });
@@ -317,7 +335,7 @@ async function loadPending() {
     };
     no.onclick = async () => {
       if (!confirm('इस वीडियो को हटा दें?')) return;
-      await db.storage.from('videos').remove([v.path]);
+      await delFile(v.path);
       const x = await db.from('videos').delete().eq('id', v.id);
       if (x.error) alert('गलती: ' + x.error.message); else loadPending();
     };
@@ -355,7 +373,7 @@ async function loadReports() {
     const clr = document.createElement('button'); clr.className = 'ok'; clr.textContent = 'शिकायत ख़ारिज करो';
     del.onclick = async () => {
       if (!confirm('इस वीडियो को हमेशा के लिए हटा दें?')) return;
-      await db.storage.from('videos').remove([v.path]);
+      await delFile(v.path);
       const x = await db.from('videos').delete().eq('id', v.id);
       if (x.error) alert('गलती: ' + x.error.message); else loadReports();
     };
@@ -387,4 +405,4 @@ $('send').onclick = async () => {
 };
 </script>
 </body>
-  </html>
+</html>
